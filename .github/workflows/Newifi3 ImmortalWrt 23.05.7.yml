@@ -1,4 +1,4 @@
-name: Build Newifi3 ImmortalWrt 23.05.7 Stable
+name: Newifi3 ImmortalWrt 23.05.7 Stable
 
 on:
   workflow_dispatch:
