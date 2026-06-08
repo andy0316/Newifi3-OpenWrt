@@ -1,9 +1,9 @@
-name: Build Newifi3 Custom OpenWrt
+name: Build Newifi3 Lean OpenWrt
 
 on:
-  workflow_dispatch: # ½öÔÊĞíÊÖ¶¯´¥·¢
+  workflow_dispatch: # ä»…å…è®¸æ‰‹åŠ¨è§¦å‘
 
-permissions:         # ½â¾ö 403 Release ±¨´í
+permissions:         # è§£å†³ 403 Release æŠ¥é”™
   contents: write
   actions: write
 
@@ -42,9 +42,9 @@ jobs:
     - name: Fix gpio-button-hotplug (Rollback to Stable)
       run: |
         cd openwrt
-        # ³¹µ×É¾³ıÓë 5.10 ÄÚºË²»¼æÈİµÄ×îĞÂÄ£¿é
+        # å½»åº•åˆ é™¤ä¸ 5.10 å†…æ ¸ä¸å…¼å®¹çš„æœ€æ–°æ¨¡å—
         rm -rf package/kernel/gpio-button-hotplug
-        # ´Ó¹Ù·½ 23.05 ÎÈ¶¨°æ·ÖÖ§µ¥¶ÀÀ­È¡¸ÃÄ£¿é½øĞĞÌæ»»
+        # ä»å®˜æ–¹ 23.05 ç¨³å®šç‰ˆåˆ†æ”¯å•ç‹¬æ‹‰å–è¯¥æ¨¡å—è¿›è¡Œæ›¿æ¢
         git clone https://github.com/openwrt/openwrt.git --branch openwrt-23.05 --single-branch temp_openwrt
         mv temp_openwrt/package/kernel/gpio-button-hotplug package/kernel/
         rm -rf temp_openwrt
@@ -68,34 +68,34 @@ jobs:
         touch .config
         
         cat >> .config <<EOF
-        # 1. Ó²¼şËø¶¨
+        # 1. ç¡¬ä»¶é”å®š
         CONFIG_TARGET_ramips=y
         CONFIG_TARGET_ramips_mt7621=y
         CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
         
-        # 2. ºËĞÄÍøÂçÓë·şÎñ
+        # 2. æ ¸å¿ƒç½‘ç»œä¸æœåŠ¡
         CONFIG_PACKAGE_luci-app-wireguard=y
         CONFIG_PACKAGE_luci-app-openvpn=y
         CONFIG_PACKAGE_luci-app-openvpn-server=y
         CONFIG_PACKAGE_luci-app-aliddns=y
         CONFIG_PACKAGE_luci-app-opkg=y
         
-        # 3. ÊµÓÃĞ¡¹¤¾ß
+        # 3. å®ç”¨å°å·¥å…·
         CONFIG_PACKAGE_luci-app-ttyd=y
         CONFIG_PACKAGE_luci-app-vlmcsd=y
         CONFIG_PACKAGE_luci-app-wol=y
         CONFIG_PACKAGE_luci-app-arpbind=y
         
-        # 4. AdGuardHome ¿ØÖÆÌ¨
+        # 4. AdGuardHome æ§åˆ¶å°
         CONFIG_PACKAGE_luci-app-adguardhome=y
         
-        # 5. ´ÅÅÌ¹ÜÀí
+        # 5. ç£ç›˜ç®¡ç†
         CONFIG_PACKAGE_luci-app-diskman=y
         CONFIG_PACKAGE_parted=y
         CONFIG_PACKAGE_blkid=y
         CONFIG_PACKAGE_e2fsprogs=y
         
-        # 6. UÅÌµ×²ãÇı¶¯
+        # 6. Uç›˜åº•å±‚é©±åŠ¨
         CONFIG_PACKAGE_kmod-usb-core=y
         CONFIG_PACKAGE_kmod-usb3=y
         CONFIG_PACKAGE_kmod-usb-storage=y
@@ -105,7 +105,7 @@ jobs:
         CONFIG_PACKAGE_kmod-nls-utf8=y
         CONFIG_PACKAGE_block-mount=y
         
-        # 7. Ç¿ÖÆÌŞ³ıºÄ¿Õ¼ä×é¼ş
+        # 7. å¼ºåˆ¶å‰”é™¤è€—ç©ºé—´ç»„ä»¶
         CONFIG_PACKAGE_luci-app-adbyby-plus=n
         CONFIG_PACKAGE_luci-app-unblockmusic=n
         CONFIG_PACKAGE_luci-app-zerotier=n
@@ -129,7 +129,7 @@ jobs:
       run: |
         cd openwrt
         echo -e "$(nproc) thread compile"
-        # ±àÒëÃüÁî
+        # ç¼–è¯‘å‘½ä»¤
         make -j$(nproc) || make -j1 || make -j1 V=s
         echo "status=success" >> $GITHUB_OUTPUT
         grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
@@ -150,6 +150,6 @@ jobs:
       if: steps.organize.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
         tag_name: "Newifi3-D2_${{ env.FILE_DATE }}"
-        name: "Newifi3 D2 ĞŞ¸´°æ"
-        body: "ÄÚºË GPIO ²¹¶¡ĞŞ¸´°æ±¾£¬º­¸Ç VPN¡¢Diskman¡¢AGH ¿ØÖÆÌ¨¼°ËùÓĞ¹ÒÔØÇı¶¯¡£"
+        name: "Newifi3 D2 ä¿®å¤ç‰ˆ"
+        body: "å†…æ ¸ GPIO è¡¥ä¸ä¿®å¤ç‰ˆæœ¬ï¼Œæ¶µç›– VPNã€Diskmanã€AGH æ§åˆ¶å°åŠæ‰€æœ‰æŒ‚è½½é©±åŠ¨ã€‚"
         files: ${{ env.FIRMWARE }}/*sysupgrade.bin
