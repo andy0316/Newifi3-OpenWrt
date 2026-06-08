@@ -38,7 +38,6 @@ jobs:
       run: |
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         cd openwrt
-        # 强行锁定到稳定版，杜绝 SNAPSHOT 噩梦
         git checkout v23.05.7
 
     - name: Clone 3rd-party Plugins (Diskman)
@@ -53,60 +52,66 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
+    - name: Modify Target Core Defaults (The Ultimate Fix)
+      run: |
+        cd openwrt
+        # 从编译系统的默认出厂名单中，强行剔除所有导致冲突的基础包
+        sed -i 's/dnsmasq //g' include/target.mk
+        sed -i 's/libustream-mbedtls //g' include/target.mk
+        sed -i 's/wpad-basic-mbedtls //g' include/target.mk
+        
+        # 针对 MT7621 芯片的专属配置文件进行相同的清理
+        sed -i 's/dnsmasq //g' target/linux/ramips/Makefile
+
     - name: Inject Custom Configuration
       run: |
         cd openwrt
         rm -f .config
         touch .config
         
-        # 1. 注入基础硬件平台
         cat >> .config <<EOF
+        # 硬件锁定
         CONFIG_TARGET_ramips=y
         CONFIG_TARGET_ramips_mt7621=y
         CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
-        EOF
         
-        # 2. 初次补全，建立基础依赖树
-        make defconfig
-        
-        # 3. 注入你要的高级插件和配置
-        cat >> .config <<EOF
-        # 网页后台与 IP
+        # 保底网页后台与固定 IP
         CONFIG_PACKAGE_luci=y
         CONFIG_PACKAGE_luci-ssl=y
         CONFIG_PACKAGE_luci-theme-argon=y
         CONFIG_IPADDR="192.168.1.1"
         
-        # 强制指定高级网络和加密库 (顶替冲突包)
+        # 补齐高级网络组件 (顶替刚才删掉的默认组件)
         CONFIG_PACKAGE_dnsmasq_full=y
         CONFIG_PACKAGE_libustream-openssl=y
         CONFIG_PACKAGE_wpad-openssl=y
         
-        # WireGuard 完整全家桶
+        # WireGuard 完整全家桶 (你的要求)
         CONFIG_PACKAGE_kmod-wireguard=y
         CONFIG_PACKAGE_wireguard-tools=y
         CONFIG_PACKAGE_luci-app-wireguard=y
         CONFIG_PACKAGE_luci-proto-wireguard=y
         
-        # OpenVPN 与 动态域名
+        # OpenVPN 与动态域名
         CONFIG_PACKAGE_luci-app-openvpn=y
         CONFIG_PACKAGE_luci-app-openvpn-server=y
         CONFIG_PACKAGE_luci-app-aliddns=y
-        CONFIG_PACKAGE_luci-app-opkg=y
         
-        # 辅助工具与 Watchcat 看门狗
+        # 辅助功能与 Watchcat (看门狗)
         CONFIG_PACKAGE_luci-app-ttyd=y
         CONFIG_PACKAGE_luci-app-vlmcsd=y
         CONFIG_PACKAGE_luci-app-wol=y
         CONFIG_PACKAGE_luci-app-arpbind=y
         CONFIG_PACKAGE_luci-app-watchcat=y
-        CONFIG_PACKAGE_luci-app-adguardhome=y
         
-        # Diskman 与 U盘存储依赖
+        # AdGuardHome 与 Diskman
+        CONFIG_PACKAGE_luci-app-adguardhome=y
         CONFIG_PACKAGE_luci-app-diskman=y
         CONFIG_PACKAGE_parted=y
         CONFIG_PACKAGE_blkid=y
         CONFIG_PACKAGE_e2fsprogs=y
+        
+        # 完整的 U盘挂载支持
         CONFIG_PACKAGE_kmod-usb-core=y
         CONFIG_PACKAGE_kmod-usb3=y
         CONFIG_PACKAGE_kmod-usb-storage=y
@@ -116,7 +121,7 @@ jobs:
         CONFIG_PACKAGE_kmod-nls-utf8=y
         CONFIG_PACKAGE_block-mount=y
         
-        # 物理隔绝超大体积刺客
+        # 剔除超大体积插件，防止溢出
         CONFIG_PACKAGE_luci-app-adbyby-plus=n
         CONFIG_PACKAGE_luci-app-unblockmusic=n
         CONFIG_PACKAGE_luci-app-zerotier=n
@@ -124,16 +129,10 @@ jobs:
         CONFIG_PACKAGE_luci-app-passwall=n
         CONFIG_PACKAGE_luci-app-vssr=n
         CONFIG_PACKAGE_luci-app-openclash=n
-        CONFIG_PACKAGE_luci-app-homeproxy=n
         EOF
         
-        # 4. 再次补全依赖关系
+        # 仅执行一次自动补全，不再做任何多余干预
         make defconfig
-        
-        # 5. 【手术刀剔除】在编译前最后一刻，直接废除底层的冲突元凶
-        sed -i 's/CONFIG_PACKAGE_libustream-mbedtls=y/# CONFIG_PACKAGE_libustream-mbedtls is not set/g' .config
-        sed -i 's/CONFIG_PACKAGE_wpad-basic-mbedtls=y/# CONFIG_PACKAGE_wpad-basic-mbedtls is not set/g' .config
-        sed -i 's/CONFIG_PACKAGE_dnsmasq=y/# CONFIG_PACKAGE_dnsmasq is not set/g' .config
 
     - name: Download Packages
       run: |
@@ -166,6 +165,6 @@ jobs:
       if: steps.organize.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
         tag_name: "v23.05.7_Newifi3_${{ env.FILE_DATE }}"
-        name: "Newifi3 D2 终极破局版 (v23.05.7)"
-        body: "内核锁定 v23.05.7。采用 sed 手术刀精准剥离了 libustream-mbedtls 与 dnsmasq 冲突包。已包含 Watchcat 和完整的 WireGuard 全家桶。"
+        name: "Newifi3 D2 基因修复版 (v23.05.7)"
+        body: "内核锁定 v23.05.7。已通过修改 target.mk 底层文件彻底根除了 dnsmasq 冲突导致的编译报错。包含 WireGuard 全家桶、Watchcat 及 Diskman。"
         files: ${{ env.FIRMWARE }}/*sysupgrade.bin
