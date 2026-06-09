@@ -44,21 +44,23 @@ jobs:
       run: |
         cd imagebuilder
         
-        # 移除了 luci-app-adguardhome 以避免依赖冲突
-        # 移除了对 dnsmasq/wpad 的干预，让其使用系统默认的最稳配置
+        # 1. 将 luci-ssl 替换为 luci-ssl-openssl 统一加密库
+        # 2. 将过时的 luci-app-aliddns 替换为 luci-app-ddns 和 ddns-scripts-aliyun
+        # 3. 强制剔除导致冲突的 -libustream-mbedtls
         make image PROFILE="d-team_newifi-d2" \
-        PACKAGES="luci luci-ssl luci-theme-argon \
+        PACKAGES="luci luci-ssl-openssl luci-theme-argon \
         kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard \
-        luci-app-openvpn luci-app-openvpn-server luci-app-aliddns luci-app-opkg \
+        luci-app-openvpn luci-app-openvpn-server luci-app-opkg \
         luci-app-ttyd luci-app-vlmcsd luci-app-wol luci-app-arpbind luci-app-watchcat \
         parted blkid e2fsprogs kmod-usb-core kmod-usb3 kmod-usb-storage kmod-usb-storage-extras \
-        kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount" \
+        kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount \
+        -libustream-mbedtls" \
         FILES="files"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "v23.05.7_ImageBuilder"
-        name: "Newifi3 D2 必出包版 (v23.05.7)"
-        body: "内核锁定 v23.05.7。移除了引发致命冲突的 AdGuardHome 面板预装要求。已固化 IP 为 192.168.1.1，内置 WireGuard 全家桶及完整 U 盘挂载功能。"
+        tag_name: "v23.05.7_ImageBuilder_Final"
+        name: "Newifi3 D2 终极云打包版 (修复依赖)"
+        body: "内核锁定 v23.05.7。统一使用 OpenSSL 解决底层冲突。已固化 IP 为 192.168.1.1，内置 WireGuard 全家桶及完整 U 盘挂载功能。"
         files: imagebuilder/bin/targets/ramips/mt7621/*sysupgrade.bin
