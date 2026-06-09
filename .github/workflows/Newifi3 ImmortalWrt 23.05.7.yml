@@ -1,4 +1,4 @@
-name: Build Newifi3 ImmortalWrt 23.05.7 Stable
+name: Newifi3 ImmortalWrt 23.05.7 (ImageBuilder)
 
 on:
   workflow_dispatch:
@@ -8,10 +8,6 @@ permissions:
   actions: write
 
 env:
-  REPO_URL: https://github.com/immortalwrt/immortalwrt
-  REPO_BRANCH: openwrt-23.05
-  UPLOAD_FIRMWARE: true
-  UPLOAD_RELEASE: true
   TZ: Asia/Shanghai
 
 jobs:
@@ -22,147 +18,50 @@ jobs:
     - name: Checkout Actions
       uses: actions/checkout@v4
 
-    - name: Initialize Environment
-      env:
-        DEBIAN_FRONTEND: noninteractive
+    - name: Install ImageBuilder Dependencies
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
-        sudo -E apt-get -qq update
-        sudo -E apt-get -qq install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pip libpython3-dev qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
-        sudo -E apt-get -qq autoremove --purge
-        sudo -E apt-get -qq clean
-        sudo timedatectl set-timezone "$TZ"
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3
 
-    - name: Clone Source Code and Lock Version
+    - name: Download Official ImageBuilder
       run: |
-        git clone $REPO_URL -b $REPO_BRANCH openwrt
-        cd openwrt
-        git checkout v23.05.7
+        # 直接拉取 23.05.7 官方稳定版的打包器，彻底告别源码编译报错
+        wget https://downloads.immortalwrt.org/releases/23.05.7/targets/ramips/mt7621/immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz
+        tar -xvf immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz
+        mv immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64 imagebuilder
 
-    - name: Clone 3rd-party Plugins (Diskman)
+    - name: Create Custom Initialization Script (Guaranteed IP)
       run: |
-        cd openwrt
-        mkdir -p package/custom
-        git clone https://github.com/lisaac/luci-app-diskman.git package/custom/luci-app-diskman
-
-    - name: Update & Install Feeds
-      run: |
-        cd openwrt
-        ./scripts/feeds update -a
-        ./scripts/feeds install -a
-
-    - name: Unify Crypto and Networking Defaults
-      run: |
-        cd openwrt
-        # 物理剔除冲突的原始组件
-        sed -i 's/dnsmasq //g' include/target.mk
-        sed -i 's/libustream-mbedtls //g' include/target.mk
-        sed -i 's/wpad-basic-mbedtls //g' include/target.mk
-        sed -i 's/dnsmasq //g' target/linux/ramips/Makefile
-
-    - name: Inject Custom Configuration
-      run: |
-        cd openwrt
-        rm -f .config
-        touch .config
-        
-        cat >> .config <<EOF
-        # 硬件锁定
-        CONFIG_TARGET_ramips=y
-        CONFIG_TARGET_ramips_mt7621=y
-        CONFIG_TARGET_ramips_mt7621_DEVICE_d-team_newifi-d2=y
-        
-        # 【核心修复：统一使用 OpenSSL，抛弃 MbedTLS】
-        # CONFIG_PACKAGE_luci-ssl is not set
-        CONFIG_PACKAGE_luci-ssl-openssl=y
-        CONFIG_PACKAGE_libustream-openssl=y
-        CONFIG_PACKAGE_wpad-openssl=y
-        CONFIG_PACKAGE_dnsmasq_full=y
-        
-        # 基础网页后台与 IP
-        CONFIG_PACKAGE_luci=y
-        CONFIG_PACKAGE_luci-theme-argon=y
-        CONFIG_IPADDR="192.168.1.1"
-        
-        # WireGuard 完整全家桶
-        CONFIG_PACKAGE_kmod-wireguard=y
-        CONFIG_PACKAGE_wireguard-tools=y
-        CONFIG_PACKAGE_luci-app-wireguard=y
-        CONFIG_PACKAGE_luci-proto-wireguard=y
-        
-        # OpenVPN 与动态域名
-        CONFIG_PACKAGE_luci-app-openvpn=y
-        CONFIG_PACKAGE_luci-app-openvpn-server=y
-        CONFIG_PACKAGE_luci-app-aliddns=y
-        
-        # 辅助功能与 Watchcat (看门狗)
-        CONFIG_PACKAGE_luci-app-ttyd=y
-        CONFIG_PACKAGE_luci-app-vlmcsd=y
-        CONFIG_PACKAGE_luci-app-wol=y
-        CONFIG_PACKAGE_luci-app-arpbind=y
-        CONFIG_PACKAGE_luci-app-watchcat=y
-        
-        # AdGuardHome 与 Diskman
-        CONFIG_PACKAGE_luci-app-adguardhome=y
-        CONFIG_PACKAGE_luci-app-diskman=y
-        CONFIG_PACKAGE_parted=y
-        CONFIG_PACKAGE_blkid=y
-        CONFIG_PACKAGE_e2fsprogs=y
-        
-        # 完整的 U盘挂载支持
-        CONFIG_PACKAGE_kmod-usb-core=y
-        CONFIG_PACKAGE_kmod-usb3=y
-        CONFIG_PACKAGE_kmod-usb-storage=y
-        CONFIG_PACKAGE_kmod-usb-storage-extras=y
-        CONFIG_PACKAGE_kmod-fs-ext4=y
-        CONFIG_PACKAGE_kmod-fs-vfat=y
-        CONFIG_PACKAGE_kmod-nls-utf8=y
-        CONFIG_PACKAGE_block-mount=y
-        
-        # 剔除刺客插件
-        CONFIG_PACKAGE_luci-app-adbyby-plus=n
-        CONFIG_PACKAGE_luci-app-unblockmusic=n
-        CONFIG_PACKAGE_luci-app-zerotier=n
-        CONFIG_PACKAGE_luci-app-ssr-plus=n
-        CONFIG_PACKAGE_luci-app-passwall=n
-        CONFIG_PACKAGE_luci-app-vssr=n
-        CONFIG_PACKAGE_luci-app-openclash=n
+        cd imagebuilder
+        mkdir -p files/etc/uci-defaults
+        # 写入开机自启脚本，强制把 LAN 口 IP 钉死在 192.168.1.1
+        cat << 'EOF' > files/etc/uci-defaults/99-init-settings
+        uci set network.lan.ipaddr='192.168.1.1'
+        uci commit network
         EOF
+        chmod +x files/etc/uci-defaults/99-init-settings
+
+    - name: Build Firmware
+      run: |
+        cd imagebuilder
         
-        make defconfig
+        # 使用 ImageBuilder 独有的语法：直接列出需要的包，用减号 (-) 剔除冲突包
+        make image PROFILE="d-team_newifi-d2" \
+        PACKAGES="luci luci-ssl-openssl luci-theme-argon \
+        dnsmasq-full wpad-openssl libustream-openssl \
+        kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard \
+        luci-app-openvpn luci-app-openvpn-server luci-app-aliddns luci-app-opkg \
+        luci-app-ttyd luci-app-vlmcsd luci-app-wol luci-app-arpbind luci-app-watchcat \
+        luci-app-adguardhome \
+        parted blkid e2fsprogs kmod-usb-core kmod-usb3 kmod-usb-storage kmod-usb-storage-extras \
+        kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount \
+        -dnsmasq -libustream-mbedtls -wpad-basic-mbedtls" \
+        FILES="files"
 
-    - name: Download Packages
-      run: |
-        cd openwrt
-        make download -j8
-        find dl -size -1024c -exec rm -f {} \;
-
-    - name: Compile the Firmware
-      id: compile
-      run: |
-        cd openwrt
-        echo -e "$(nproc) thread compile"
-        make -j$(nproc) || make -j1 || make -j1 V=s
-        echo "status=success" >> $GITHUB_OUTPUT
-        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
-        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
-        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
-
-    - name: Organize Files
-      id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
-      run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
-
-    - name: Upload Firmware to Release
+    - name: Upload to Release
       uses: softprops/action-gh-release@v2
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true' && !cancelled()
       with:
-        tag_name: "v23.05.7_Newifi3_${{ env.FILE_DATE }}"
-        name: "Newifi3 D2 密码学统一版 (v23.05.7)"
-        body: "内核锁定 v23.05.7。已将 luci-ssl 替换为 luci-ssl-openssl，全系统强行统一使用 OpenSSL，完美解决了 libustream 包冲突导致的 255 错误。"
-        files: ${{ env.FIRMWARE }}/*sysupgrade.bin
+        tag_name: "v23.05.7_ImageBuilder"
+        name: "Newifi3 D2 终极云打包版 (绝不失联)"
+        body: "使用官方 ImageBuilder 积木打包方案。已彻底杜绝底层编译冲突导致的网络瘫痪。内置固化 IP 脚本、WireGuard 全家桶、Watchcat 及完整 U盘挂载环境。"
+        files: imagebuilder/bin/targets/ramips/mt7621/*sysupgrade.bin
