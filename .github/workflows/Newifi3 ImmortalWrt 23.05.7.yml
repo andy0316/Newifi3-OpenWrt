@@ -25,7 +25,6 @@ jobs:
 
     - name: Download Official ImageBuilder
       run: |
-        # 直接拉取 23.05.7 官方稳定版的打包器，彻底告别源码编译报错
         wget https://downloads.immortalwrt.org/releases/23.05.7/targets/ramips/mt7621/immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz
         tar -xvf immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz
         mv immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64 imagebuilder
@@ -45,23 +44,21 @@ jobs:
       run: |
         cd imagebuilder
         
-        # 使用 ImageBuilder 独有的语法：直接列出需要的包，用减号 (-) 剔除冲突包
+        # 移除了 luci-app-adguardhome 以避免依赖冲突
+        # 移除了对 dnsmasq/wpad 的干预，让其使用系统默认的最稳配置
         make image PROFILE="d-team_newifi-d2" \
-        PACKAGES="luci luci-ssl-openssl luci-theme-argon \
-        dnsmasq-full wpad-openssl libustream-openssl \
+        PACKAGES="luci luci-ssl luci-theme-argon \
         kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard \
         luci-app-openvpn luci-app-openvpn-server luci-app-aliddns luci-app-opkg \
         luci-app-ttyd luci-app-vlmcsd luci-app-wol luci-app-arpbind luci-app-watchcat \
-        luci-app-adguardhome \
         parted blkid e2fsprogs kmod-usb-core kmod-usb3 kmod-usb-storage kmod-usb-storage-extras \
-        kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount \
-        -dnsmasq -libustream-mbedtls -wpad-basic-mbedtls" \
+        kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount" \
         FILES="files"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "v23.05.7_ImageBuilder"
-        name: "Newifi3 D2 终极云打包版 (绝不失联)"
-        body: "使用官方 ImageBuilder 积木打包方案。已彻底杜绝底层编译冲突导致的网络瘫痪。内置固化 IP 脚本、WireGuard 全家桶、Watchcat 及完整 U盘挂载环境。"
+        name: "Newifi3 D2 必出包版 (v23.05.7)"
+        body: "内核锁定 v23.05.7。移除了引发致命冲突的 AdGuardHome 面板预装要求。已固化 IP 为 192.168.1.1，内置 WireGuard 全家桶及完整 U 盘挂载功能。"
         files: imagebuilder/bin/targets/ramips/mt7621/*sysupgrade.bin
