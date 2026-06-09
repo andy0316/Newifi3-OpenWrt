@@ -29,24 +29,11 @@ jobs:
         tar -xvf immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64.tar.xz
         mv immortalwrt-imagebuilder-23.05.7-ramips-mt7621.Linux-x86_64 imagebuilder
 
-    - name: Create Custom Initialization Script (Guaranteed IP)
-      run: |
-        cd imagebuilder
-        mkdir -p files/etc/uci-defaults
-        # 写入开机自启脚本，强制把 LAN 口 IP 钉死在 192.168.1.1
-        cat << 'EOF' > files/etc/uci-defaults/99-init-settings
-        uci set network.lan.ipaddr='192.168.1.1'
-        uci commit network
-        EOF
-        chmod +x files/etc/uci-defaults/99-init-settings
-
     - name: Build Firmware
       run: |
         cd imagebuilder
         
-        # 1. 将 luci-ssl 替换为 luci-ssl-openssl 统一加密库
-        # 2. 将过时的 luci-app-aliddns 替换为 luci-app-ddns 和 ddns-scripts-aliyun
-        # 3. 强制剔除导致冲突的 -libustream-mbedtls
+        # 移除了所有自编脚本，完全使用官方健康的网络初始化流程
         make image PROFILE="d-team_newifi-d2" \
         PACKAGES="luci luci-ssl-openssl luci-theme-argon \
         kmod-wireguard wireguard-tools luci-app-wireguard luci-proto-wireguard \
@@ -54,13 +41,12 @@ jobs:
         luci-app-ttyd luci-app-vlmcsd luci-app-wol luci-app-arpbind luci-app-watchcat \
         parted blkid e2fsprogs kmod-usb-core kmod-usb3 kmod-usb-storage kmod-usb-storage-extras \
         kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 block-mount \
-        -libustream-mbedtls" \
-        FILES="files"
+        -libustream-mbedtls"
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "v23.05.7_ImageBuilder_Final"
-        name: "Newifi3 D2 终极云打包版 (修复依赖)"
-        body: "内核锁定 v23.05.7。统一使用 OpenSSL 解决底层冲突。已固化 IP 为 192.168.1.1，内置 WireGuard 全家桶及完整 U 盘挂载功能。"
+        tag_name: "v23.05.7_ImageBuilder_Stable"
+        name: "Newifi3 D2 纯净版 (v23.05.7)"
+        body: "内核锁定 v23.05.7。包含 WireGuard 全家桶及完整 U 盘挂载功能。"
         files: imagebuilder/bin/targets/ramips/mt7621/*sysupgrade.bin
